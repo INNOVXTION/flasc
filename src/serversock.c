@@ -188,7 +188,7 @@ int main(void)
         }
         break;
     }
-
+    printf("hello branch\n");
     WaitForSingleObject(h_thread, INFINITE);
 
     // closing listening socket
