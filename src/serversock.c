@@ -19,18 +19,20 @@ const int poll_timeout = 2500; // 2.5 seconds
 const int thread_timeout = 60000; // one minute
 
 void handle_sigint(int sig);
-void error_cleanup(SOCKET *socket, struct addrinfo **address);
+void error_cleanup(SOCKET *socket);
 void *get_sockaddr_in(struct sockaddr *sa);
+SOCKET new_lisock();
 LPTSTR Messageformat(int message_id);
 DWORD WINAPI thread_function(LPVOID lpParam);
 
 int main(void)
 {    
     WSADATA wsa_data;
-    int WSAstatus, status_code, poll_status;
+    int WSAstatus, poll_status;
     signal(SIGINT, handle_sigint);
     int err;
     LPTSTR errstring;
+    SOCKET listen_sock;
     
     WSAstatus = WSAStartup(MAKEWORD(2, 2), &wsa_data);
     if (WSAstatus != 0)
@@ -46,6 +48,105 @@ int main(void)
         exit(1);
     }
     
+
+    LPDWORD thread_id;
+    HANDLE h_thread;
+    struct pollfd fd_array[1];
+
+    listen_sock = new_lisock();
+    if (listen_sock == -1)
+    {
+        fprintf(stderr, "socket error, shutting down...\n");
+        WSACleanup();
+        exit(1);
+    }
+
+    // accept connections
+    SOCKET con_sock;
+    char s[INET_ADDRSTRLEN];
+    while (1)
+    {
+        struct sockaddr_storage client_addr;
+        socklen_t addrlen = sizeof(client_addr);
+        con_sock = accept(listen_sock, (struct sockaddr*) &client_addr, &addrlen);
+        if (con_sock == SOCKET_ERROR)
+        {
+            err = WSAGetLastError();
+            errstring = Messageformat(err);
+            fprintf(stderr, "SOCKET ACCEPT ERROR: %s\n", errstring);
+            LocalFree(errstring);
+            continue;
+        }
+
+        // // polling socket
+        // fd_array[0].fd = con_sock;
+        // fd_array[0].events = POLLIN;
+        
+        // poll_status = WSAPoll(fd_array, 1, poll_timeout);
+
+        // if (poll_status == SOCKET_ERROR) {
+        //     int i_err = WSAGetLastError();
+        //     char *str_err = Messageformat(i_err); 
+        //     fprintf(stderr, "POLLING ERROR: %s\n", str_err);
+        //     break;
+        // };
+        // if (fd_array[0].revents != 0)
+        // {
+        //     fprintf(stderr, "poll successful\n");
+        // }
+        
+        inet_ntop(client_addr.ss_family, (struct sockaddr*) &client_addr, s, sizeof(s));
+        fprintf(stderr,"connected to: %s\n", s);
+        
+        h_thread = CreateThread(NULL, 0, thread_function, &con_sock, 0, thread_id);
+        if (h_thread == NULL)
+        {
+            fprintf(stderr,"THREAD CREATION ERROR.\n");
+            closesocket(con_sock); 
+            WSACleanup();
+            exit(1);
+        }
+        break;
+    }
+
+    WaitForSingleObject(h_thread, INFINITE);
+
+    // closing listening socket
+    listen_sock = closesocket(listen_sock);
+    if (listen_sock == SOCKET_ERROR)
+    {
+        error_cleanup(&listen_sock);
+    }
+
+    // cleanup
+    fprintf(stderr,"exiting...\n");
+    WSACleanup();
+    return 0;
+}
+
+void handle_sigint(int sig)
+{
+    printf("\nExiting...\n");
+    WSACleanup();
+
+    exit(0); // exit program
+}
+
+void *get_sockaddr_in(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+SOCKET new_lisock()
+{
+    int err, status_code;
+    char yes = 'y';
+    LPTSTR errstring;
+    char ip_buffer[14];
+
     struct addrinfo *addr_res = NULL;
     struct addrinfo hint, *ptr;
 
@@ -59,26 +160,26 @@ int main(void)
     hint.ai_next = NULL;
     SOCKET listen_sock;
 
-    char yes = 'y';
-    char ip_buffer[14];
-    LPDWORD thread_id;
-    HANDLE h_thread;
 
-    struct pollfd fd_array[1];
-
-    // receiving IP
+    // receiving IP addresses
     if ((status_code = getaddrinfo(HOST, PORT, &hint, &addr_res)) != 0 )
     {
         err = WSAGetLastError();
         errstring = Messageformat(err);
         fprintf(stderr, "ADDRESS ERROR: %s\n", errstring);
         LocalFree(errstring);
-        WSACleanup();
-        exit(1);
+        return -1;
     };
 
+    // loop over available ip addresses from getaddrfino()
     for (ptr = addr_res; ptr != NULL; ptr = ptr->ai_next)
-    {
+    {   
+        if (ptr == NULL)
+        {
+            freeaddrinfo(addr_res);
+            fprintf(stderr, "SOCKET ERROR\n");
+            return -1;
+        }
         // creating socket
         if ((listen_sock = socket(addr_res->ai_family, addr_res->ai_socktype, addr_res->ai_protocol))
             == INVALID_SOCKET)
@@ -89,6 +190,7 @@ int main(void)
                 LocalFree(errstring);
                 continue;
             }
+        // configures socket to be reusable 
         fprintf(stderr, "socket created!\n");
         if (setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes))
             == INVALID_SOCKET)
@@ -99,7 +201,7 @@ int main(void)
                 LocalFree(errstring);
                 WSACleanup();
                 freeaddrinfo(addr_res);
-                exit(1);
+                return -1;
             }
         // binding socket
         if (bind(listen_sock, addr_res->ai_addr, addr_res->ai_addrlen)
@@ -135,103 +237,24 @@ int main(void)
         LocalFree(errstring);
         WSACleanup();
         freeaddrinfo(addr_res);
-        exit(1);
+        return -1;
     }
     fprintf(stderr, "listening...");
     fprintf(stderr, "(cancel with CTRL+C)\n");
 
-    // accept connections
-    SOCKET con_sock;
-    char s[INET_ADDRSTRLEN];
-    while (1)
-    {
-        struct sockaddr_storage client_addr;
-        socklen_t addrlen = sizeof(client_addr);
-        con_sock = accept(listen_sock, (struct sockaddr*) &client_addr, &addrlen);
-        if (con_sock == SOCKET_ERROR)
-        {
-            err = WSAGetLastError();
-            errstring = Messageformat(err);
-            fprintf(stderr, "SOCKET ACCEPT ERROR: %s\n", errstring);
-            LocalFree(errstring);
-            continue;;
-        }
-
-        // // polling socket
-        // fd_array[0].fd = con_sock;
-        // fd_array[0].events = POLLIN;
-        
-        // poll_status = WSAPoll(fd_array, 1, poll_timeout);
-
-        // if (poll_status == SOCKET_ERROR) {
-        //     int i_err = WSAGetLastError();
-        //     char *str_err = Messageformat(i_err); 
-        //     fprintf(stderr, "POLLING ERROR: %s\n", str_err);
-        //     break;
-        // };
-        // if (fd_array[0].revents != 0)
-        // {
-        //     fprintf(stderr, "poll successful\n");
-        // }
-        
-        inet_ntop(client_addr.ss_family, (struct sockaddr*) &client_addr, s, sizeof(s));
-        fprintf(stderr,"connected to: %s\n", s);
-        
-        h_thread = CreateThread(NULL, 0, thread_function, &con_sock, 0, thread_id);
-        if (h_thread == NULL)
-        {
-            fprintf(stderr,"THREAD CREATION ERROR.\n");
-            closesocket(con_sock); 
-            freeaddrinfo(addr_res);
-            WSACleanup();
-            exit(1);
-        }
-        break;
-    }
-    printf("hello branch\n");
-    WaitForSingleObject(h_thread, INFINITE);
-
-    // closing listening socket
-    status_code = closesocket(listen_sock);
-    if (status_code == SOCKET_ERROR)
-    {
-        error_cleanup(&listen_sock, &addr_res);
-    }
-
-    // cleanup
-    fprintf(stderr,"exiting...\n");
-    WSACleanup();
     freeaddrinfo(addr_res);
-    return 0;
+    return listen_sock;
 }
 
-void handle_sigint(int sig)
-{
-    printf("\nExiting...\n");
-    WSACleanup();
-
-    exit(0); // exit program
-}
-
-void *get_sockaddr_in(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
-
-void error_cleanup(SOCKET *socket, struct addrinfo **address)
+void error_cleanup(SOCKET *socket)
 {
     int err = WSAGetLastError();
     LPSTR errstring = Messageformat(err);
     fprintf(stderr, "ERROR: %s\n", errstring);
     LocalFree(errstring);
     WSACleanup();
-    freeaddrinfo(*address);
     exit(1);
 }
-
 
 LPTSTR Messageformat(int message_id)
 {
