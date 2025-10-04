@@ -9,11 +9,14 @@
 #include <ws2tcpip.h>
 #include <signal.h>
 #include <process.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #define BACKLOG 5
 #define PORT "1337"
-#define BUFFER_SIZE 100
-#define MESSAGE_BUFFER 512
+#define BUFFER_SIZE 512
+#define MESSAGE_BUFFER 50
+#define HTTP_REQ_BUFFER 1024
 #define HOST NULL
 #define POLL_SOCKET_AMNT 1
 
@@ -81,12 +84,12 @@ int main(void)
         };
         if (poll_status == 0)
         {
-            fprintf(stderr, "poll time out, trying again..\n");
+            // fprintf(stderr, "poll time out, trying again..\n");
             continue;
         }
         if (poll_status > 0)
         {
-            fprintf(stderr, "poll triggered!\n");
+            // fprintf(stderr, "poll triggered!\n");
             h_thread = (HANDLE) _beginthreadex(NULL, 0, accept_worker, &(sock_array[0].fd), 0, NULL);
             if (h_thread == 0)
             {
@@ -187,6 +190,8 @@ SOCKET new_lisock(void)
                 freeaddrinfo(addr_res);
                 continue;
             }
+        int timeout = 5000;
+        setsockopt(listen_sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
         // // sets socket to non blocking
         // if (ioctlsocket(listen_sock, FIONBIO, &mode)
         //     == SOCKET_ERROR)
@@ -268,14 +273,19 @@ LPTSTR Messageformat(int message_id)
 
 unsigned int WINAPI accept_worker(void *arg)
 {
-    printf("thread start...\n");
+    // printf("thread start...\n");
     char *str_err;
-    char *recv_buffer = malloc(BUFFER_SIZE * sizeof(char));
-    int i_err, status, packets_received;
+    char *recv_buffer = calloc(BUFFER_SIZE, BUFFER_SIZE * sizeof(char));
+    int i_err, status, total;
+    int packets_received = 0;
     SOCKET *listen_sock = (SOCKET *) arg;
     SOCKET con_sock;
     struct sockaddr_storage client_addr;
     char s[INET6_ADDRSTRLEN];
+    
+    char *header_buffer = calloc(HTTP_REQ_BUFFER, sizeof(char));
+    int padding = 0;
+    header_buffer[0] = '\0';
 
     // accept connections
     socklen_t addrlen = sizeof(client_addr);
@@ -288,35 +298,54 @@ unsigned int WINAPI accept_worker(void *arg)
         LocalFree(str_err);
         return -1;
     }
-
     inet_ntop(client_addr.ss_family, (struct sockaddr*) &client_addr, s, sizeof(s));
     fprintf(stderr,"connected to: %s\n", s);
 
-    do {
-        fprintf(stderr, "Waiting for data...\n");
-        packets_received = recv(con_sock, recv_buffer, BUFFER_SIZE, 0);
+    // receiver loop
+    fprintf(stderr, "Waiting for data...\n");
+    while (1)
+    {
         if (packets_received > 0)
         {
-            fprintf(stderr, "Receiving data...%i bytes\n", packets_received);
+            if (strstr(header_buffer, "\r\n\r\n") != NULL) //cheacking HTTP header
+            {
+                fprintf(stderr, "HTTP header found!\n");
+                fprintf(stderr, "Data received:\n%s\n", header_buffer);
+                break;
+            }
+            else if (padding + packets_received >= HTTP_REQ_BUFFER)
+            {
+                fprintf(stderr, "buffer overflow! \n");
+                break;
+            }
         }
-        else if (packets_received == 0)
+        packets_received = recv(con_sock, recv_buffer, BUFFER_SIZE - 1, 0);
+        if (packets_received == 0)
         {
-            fprintf(stderr, "Connection closed...\n");
+            // fprintf(stderr, "Connection closed...\n");
+            break;
         }
-        else
+        if (packets_received == SOCKET_ERROR)
         {
             i_err = WSAGetLastError();
             str_err = Messageformat(i_err);
             fprintf(stderr, "RECEIVE ERROR: %s, %i\n", str_err, i_err);
             LocalFree(str_err);
-            free(recv_buffer);
-            return -1;
+            break;
         }
-    } while (packets_received > 0);
-
+        fprintf(stderr, "Receiving data...%i bytes\n", packets_received);
+        memcpy(header_buffer + padding, recv_buffer, packets_received);
+        padding += packets_received;
+        header_buffer[padding] = '\0';
+    }
     
-    fprintf(stderr, "Data received:\n%s\n", recv_buffer);
     free(recv_buffer);
-    closesocket(con_sock); // No longer needed
+    closesocket(con_sock); 
     return 0;
+}
+
+
+bool http_dispatch()
+{
+
 }
