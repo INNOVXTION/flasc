@@ -67,7 +67,7 @@ int main(void)
     {
         fprintf(stderr,"ADDRESS ERROR: %s\n", Messageformat(WSAGetLastError()));
     }
-    fprintf(stderr,"address info received:\n");
+    fprintf(stderr,"address info received, connecting to:\n");
     fprintf(stderr,"ip: %s on port: %s\n", ip, PORT);
 
     // creating socket
