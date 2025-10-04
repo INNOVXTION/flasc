@@ -24,20 +24,19 @@ void handle_sigint(int sig);
 void *get_sockaddr_in(struct sockaddr *sa);
 SOCKET new_lisock(void);
 LPTSTR Messageformat(int message_id);
-unsigned int WINAPI thread_function(void *arg);
+unsigned int WINAPI accept_worker(void *arg);
 
 int main(void)
 {    
     signal(SIGINT, handle_sigint);
 
     WSADATA wsa_data;
-    struct sockaddr_storage client_addr;
+
     int WSAstatus, poll_status;
     int err;
     LPTSTR errstring;
 
     SOCKET listen_sock, con_sock;
-    char s[INET6_ADDRSTRLEN];
 
     LPDWORD thread_id;
     HANDLE h_thread;
@@ -88,30 +87,14 @@ int main(void)
         if (poll_status > 0)
         {
             fprintf(stderr, "poll triggered!\n");
-
+            h_thread = (HANDLE) _beginthreadex(NULL, 0, accept_worker, &(sock_array[0].fd), 0, NULL);
+            if (h_thread == 0)
+            {
+                fprintf(stderr,"THREAD CREATION ERROR.\n");
+                closesocket(sock_array[0].fd);
+                break;
+            }
         }
-        // accept connections
-        socklen_t addrlen = sizeof(client_addr);
-        con_sock = accept(listen_sock, (struct sockaddr*) &client_addr, &addrlen);
-        if (con_sock == INVALID_SOCKET)
-        {
-            err = WSAGetLastError();
-            errstring = Messageformat(err);
-            fprintf(stderr, "SOCKET ACCEPT ERROR: %s\n", errstring);
-            LocalFree(errstring);
-            continue;
-        }
-
-        inet_ntop(client_addr.ss_family, (struct sockaddr*) &client_addr, s, sizeof(s));
-        fprintf(stderr,"connected to: %s\n", s);
-        
-        h_thread = (HANDLE) _beginthreadex(NULL, 0, thread_function, &con_sock, 0, NULL);
-        if (h_thread == 0)
-        {
-            fprintf(stderr,"THREAD CREATION ERROR.\n");
-            break;
-        }
-        break;
     }
 
     WaitForSingleObject(h_thread, INFINITE);
@@ -283,26 +266,35 @@ LPTSTR Messageformat(int message_id)
     return formatted_message;
 }
 
-unsigned int WINAPI thread_function(void *arg)
+unsigned int WINAPI accept_worker(void *arg)
 {
     printf("thread start...\n");
     char *str_err;
     char *recv_buffer = malloc(BUFFER_SIZE * sizeof(char));
-    int i_err, status, packets_received, event_status;
-    SOCKET *con_sock = (SOCKET *) arg;
-    WSAEVENT new_event;
-    
-    // // listen for data to be received
-    // do
-    // {
-    //     new_event = WSACreateEvent();
-    //     event_status = WSAEventSelect(con_sock, new_event, FD_READ);
+    int i_err, status, packets_received;
+    SOCKET *listen_sock = (SOCKET *) arg;
+    SOCKET con_sock;
+    struct sockaddr_storage client_addr;
+    char s[INET6_ADDRSTRLEN];
 
-    // } while (event_status != 0);
-    // receiving data
+    // accept connections
+    socklen_t addrlen = sizeof(client_addr);
+    con_sock = accept(*listen_sock, (struct sockaddr*) &client_addr, &addrlen);
+    if (con_sock == INVALID_SOCKET)
+    {
+        i_err = WSAGetLastError();
+        str_err = Messageformat(i_err);
+        fprintf(stderr, "SOCKET ACCEPT ERROR: %s\n", str_err);
+        LocalFree(str_err);
+        return -1;
+    }
+
+    inet_ntop(client_addr.ss_family, (struct sockaddr*) &client_addr, s, sizeof(s));
+    fprintf(stderr,"connected to: %s\n", s);
+
     do {
         fprintf(stderr, "Waiting for data...\n");
-        packets_received = recv(*con_sock, recv_buffer, BUFFER_SIZE, 0);
+        packets_received = recv(con_sock, recv_buffer, BUFFER_SIZE, 0);
         if (packets_received > 0)
         {
             fprintf(stderr, "Receiving data...%i bytes\n", packets_received);
@@ -325,6 +317,6 @@ unsigned int WINAPI thread_function(void *arg)
     
     fprintf(stderr, "Data received:\n%s\n", recv_buffer);
     free(recv_buffer);
-    closesocket(*con_sock); // No longer needed
+    closesocket(con_sock); // No longer needed
     return 0;
 }
