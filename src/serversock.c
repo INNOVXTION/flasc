@@ -2,14 +2,16 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
+#include "flasc.h"
+
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <signal.h>
 #include <process.h>
-#include <stdbool.h>
 #include <stdint.h>
 
 #define BACKLOG 5
@@ -30,7 +32,7 @@ SOCKET new_lisock(void);
 LPTSTR Messageformat(int message_id);
 unsigned int WINAPI accept_worker(void *arg);
 
-int main(void)
+int server(void)
 {    
     signal(SIGINT, handle_sigint);
 
@@ -307,7 +309,7 @@ unsigned int WINAPI accept_worker(void *sock)
         {
             if (strstr(header_buffer, "\r\n\r\n") != NULL) //cheacking HTTP header
             {
-                fprintf(stderr, "HTTP header found!\n");
+                fprintf(stderr, "HTTP request found!\n");
                 fprintf(stderr, "Data received:\n%s\n", header_buffer);
                 break;
             }

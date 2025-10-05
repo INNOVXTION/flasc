@@ -1,16 +1,21 @@
-all: final
+# Build the flasc executable by default
 
-flasc: flasc.o http.o
-	gcc -o flasc flasc.o http.o -lws2_32
+all: flasc
 
-flasc.o: flasc.c flasc.h http.h sockhead.h
-	gcc -c flasc.c -lws2_32
+# Link step
+flasc: flasc.o http.o serversock.o
+	gcc -o flasc.exe flasc.o http.o serversock.o -lws2_32
 
-http.o: http.c http.h server.o
-	gcc -c http.c server.o -lws2_32
+# Compile steps
+flasc.o: flasc.c flasc.h
+	gcc -c flasc.c
 
-server.o: server.c sockhead.h
-	gcc -c serversock.c -lws2_32
+http.o: http.c flasc.h
+	gcc -c http.c
 
+serversock.o: serversock.c flasc.h
+	gcc -c serversock.c
+
+# Optional cleanup rule
 clean:
-	rm flasc.o http.o final
+	rm *.o
