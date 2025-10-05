@@ -16,12 +16,13 @@
 #define PORT "1337"
 #define BUFFER_SIZE 512
 #define MESSAGE_BUFFER 50
-#define HTTP_REQ_BUFFER 1024
+#define HTTP_REQ_BUFFER 8192
 #define HOST NULL
 #define POLL_SOCKET_AMNT 1
 
 const int poll_timeout = 2500; // 2.5 seconds
 const int thread_timeout = 60000; // one minute
+const int recv_timeout = 5000;
 
 void handle_sigint(int sig);
 void *get_sockaddr_in(struct sockaddr *sa);
@@ -206,8 +207,7 @@ SOCKET new_lisock(void)
                 freeaddrinfo(addr_res);
                 continue;
             }
-        int timeout = 5000;
-        setsockopt(listen_sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+        setsockopt(listen_sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&recv_timeout, sizeof(recv_timeout));
         // // sets socket to non blocking
         // if (ioctlsocket(listen_sock, FIONBIO, &mode)
         //     == SOCKET_ERROR)
@@ -335,8 +335,12 @@ unsigned int WINAPI accept_worker(void *sock)
         memcpy(header_buffer + padding, recv_buffer, packets_received);
         padding += packets_received;
     }
+
+    // call http module for response
+
     char *response = "HTTP/1.0 200 OK\r\nConnection: close\r\n\r\nHello,World";
     send(con_sock, response, strlen(response), 0);
+
     free(header_buffer);
     free(recv_buffer);
     closesocket(con_sock); 
