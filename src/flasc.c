@@ -12,8 +12,10 @@ int main() {
 // function to parse text file for routing
 
 int string_builder(int cap, string* new_string) {
-    new_string->data = malloc(cap, sizeof(char));
-    if (!new_string->data) return -1;
+    new_string->data = malloc(cap + 1, sizeof(char));
+    if (!new_string->data) {
+        return -1;
+    }
     new_string->data[0] = '\0';
     new_string->len = 0;
     new_string->cap = cap;
@@ -26,7 +28,9 @@ int string_append(char *text, string *string)
     if (len + string->len > string->cap)
     {
         char *new_data = realloc(string->data, (string->len + len) * 2);
-        if (!new_data) return -1;
+        if (!new_data) {
+            return -1;
+        }
         string->data = new_data;
         string->cap = (string->len + len) * 2;
     }
@@ -44,7 +48,13 @@ int delete_string(string *string)
     return 0;
 }
 
+// WIP
 int string_slicer(int low, int high, string *input_string, string *slice)
 {
-
+    if (((low - high) == 0) || low > high) {
+        return -1;
+    }
+    if (input_string->len < high || input_string->len < low) {
+        return -1;
+    }
 }
