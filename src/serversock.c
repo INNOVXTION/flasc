@@ -2,8 +2,6 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
-#include "flasc.h"
-
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -13,12 +11,13 @@
 #include <signal.h>
 #include <process.h>
 #include <stdint.h>
+#include "flasc.h"
 
 #define BACKLOG 5
 #define PORT "1337"
-#define BUFFER_SIZE 512
+#define BUFFER_SIZE 512 //0.5 KB
 #define MESSAGE_BUFFER 50
-#define HTTP_REQ_BUFFER 8192
+#define HTTP_REQ_BUFFER 4096 // 4KB
 #define HOST NULL
 #define POLL_SOCKET_AMNT 1
 
@@ -291,15 +290,18 @@ LPTSTR Messageformat(int message_id)
 
 unsigned int WINAPI accept_worker(void *sock)
 {
-    // printf("thread start...\n");
+    printf("thread start...\n");
     char *str_err;
-    char *recv_buffer = calloc(BUFFER_SIZE, BUFFER_SIZE * sizeof(char));
+    char *recv_buffer = calloc(BUFFER_SIZE + 1, sizeof(char));
     int i_err, status, total;
     int packets_received = 0;
     SOCKET con_sock = *((SOCKET *) sock);
 
-    char *header_buffer = calloc(HTTP_REQ_BUFFER, sizeof(char));
-    int padding = 0;
+    string request;
+    if (string_builder(HTTP_REQ_BUFFER, &request) == STRING_ERROR) {
+        fprintf(stderr, "STRING ERROR\n");
+    };
+    int null_mark = 0;
 
     // receiver loop
     fprintf(stderr, "Waiting for data...\n");
@@ -307,20 +309,22 @@ unsigned int WINAPI accept_worker(void *sock)
     {
         if (packets_received > 0)
         {
-            if (strstr(header_buffer, "\r\n\r\n") != NULL) //cheacking HTTP header
+            if (strstr(request.data, "\r\n\r\n") != NULL) //cheacking HTTP header
             {
                 fprintf(stderr, "HTTP request found!\n");
-                fprintf(stderr, "Data received:\n%s\n", header_buffer);
+                fprintf(stderr, "Data received:\n----\n%s---\n", request.data);
                 break;
             }
-            else if (padding + packets_received >= HTTP_REQ_BUFFER)
+            else if (request.len + packets_received >= HTTP_REQ_BUFFER)
             {
                 fprintf(stderr, "buffer overflow! \n");
                 break;
             }
         }
+
+        // reading socket
         packets_received = recv(con_sock, recv_buffer, BUFFER_SIZE - 1, 0);
-        if (packets_received == 0)
+        if (packets_received == 0) // client disconnect
         {
             fprintf(stderr, "Connection closed...\n");
             break;
@@ -333,18 +337,22 @@ unsigned int WINAPI accept_worker(void *sock)
             LocalFree(str_err);
             break;
         }
+
+        // appending data
+        recv_buffer[packets_received] = '\0';
         fprintf(stderr, "Receiving data...%i bytes\n", packets_received);
-        memcpy(header_buffer + padding, recv_buffer, packets_received);
-        padding += packets_received;
+        if (string_append(recv_buffer, &request) == STRING_ERROR) {
+            fprintf(stderr, "STRING ERROR\n");
+        };
     }
 
     // call http module for response
-
     char *response = "HTTP/1.0 200 OK\r\nConnection: close\r\n\r\nHello,World";
     send(con_sock, response, strlen(response), 0);
-
-    free(header_buffer);
+    
+    delete_string(&request);
     free(recv_buffer);
     closesocket(con_sock); 
+    printf("thread closing...\n");
     return 0;
 }
