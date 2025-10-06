@@ -4,9 +4,12 @@
 #include <string.h>
 
 int string_builder(int cap, string* new_string) {
+    if (!new_string) {
+        return STRING_ERROR;
+    }
     new_string->data = malloc((cap + 1) * sizeof(char));
     if (!new_string->data) {
-        return -1;
+        return STRING_ERROR;
     }
     new_string->data[0] = '\0';
     new_string->len = 0;
@@ -16,6 +19,12 @@ int string_builder(int cap, string* new_string) {
 
 int string_append(char *text, string *string)
 {
+    // safety measure when appending to a deleted string
+    // if (string->data == NULL) {
+    //     if (string_builder(strlen(text), string) == STRING_ERROR) {
+    //         return -1;
+    //     }
+    // }
     int len = strlen(text);
     if (len + string->len > string->cap)
     {
@@ -34,7 +43,9 @@ int string_append(char *text, string *string)
 
 int delete_string(string *string)
 {
+    if (!string) return -1; 
     free(string->data);
+    string->data = NULL;
     string->cap = 0;
     string->len = 0;
     return 0;

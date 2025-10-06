@@ -1,5 +1,6 @@
 # Build the flasc executable by default
 CFLAGS = -g -O0
+BUILD_DIR = bin
 
 all: flasc
 

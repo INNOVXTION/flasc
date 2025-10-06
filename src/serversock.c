@@ -23,7 +23,7 @@
 
 const int poll_timeout = 2500; // 2.5 seconds
 const int thread_timeout = 60000; // one minute
-const int recv_timeout = 5000;
+const int recv_timeout = 21000;
 
 void handle_sigint(int sig);
 void *get_sockaddr_in(struct sockaddr *sa);
@@ -43,6 +43,7 @@ int server(void)
     char s[INET6_ADDRSTRLEN];
 
     SOCKET listen_sock, con_sock;
+    SOCKET *sock_copy = malloc(sizeof(SOCKET));
 
     LPDWORD thread_id;
     HANDLE h_thread;
@@ -108,7 +109,8 @@ int server(void)
             inet_ntop(client_addr.ss_family, (struct sockaddr*) &client_addr, s, sizeof(s));
             fprintf(stderr,"connected to: %s\n", s);
             // handing off to worker
-            h_thread = (HANDLE) _beginthreadex(NULL, 0, accept_worker, &con_sock, 0, NULL);
+            *sock_copy = con_sock; //copying socket
+            h_thread = (HANDLE) _beginthreadex(NULL, 0, accept_worker, sock_copy, 0, NULL);
             if (h_thread == 0)
             {
                 fprintf(stderr,"THREAD CREATION ERROR.\n");
@@ -295,11 +297,16 @@ unsigned int WINAPI accept_worker(void *sock)
     char *recv_buffer = calloc(BUFFER_SIZE + 1, sizeof(char));
     int i_err, status, total;
     int packets_received = 0;
-    SOCKET con_sock = *((SOCKET *) sock);
+    // SOCKET con_sock = *((SOCKET *) sock);
+    SOCKET con_sock = *(SOCKET *)sock;
+    free(sock);
 
-    string request;
+    string request, response;
     if (string_builder(HTTP_REQ_BUFFER, &request) == STRING_ERROR) {
-        fprintf(stderr, "STRING ERROR\n");
+        fprintf(stderr, "thread string error\n");
+    };
+    if (string_builder(1024, &response) == STRING_ERROR) {
+        fprintf(stderr, "thread string error\n");
     };
     int null_mark = 0;
 
@@ -313,6 +320,9 @@ unsigned int WINAPI accept_worker(void *sock)
             {
                 fprintf(stderr, "HTTP request found!\n");
                 fprintf(stderr, "Data received:\n----\n%s---\n", request.data);
+                http_handler(&request, &response);
+                fprintf(stderr, "Response:\n----\n%s\n---\n", response.data);
+                send(con_sock, response.data, response.len, 0);
                 break;
             }
             else if (request.len + packets_received >= HTTP_REQ_BUFFER)
@@ -345,14 +355,28 @@ unsigned int WINAPI accept_worker(void *sock)
             fprintf(stderr, "STRING ERROR\n");
         };
     }
+    if (shutdown(con_sock, SD_BOTH) == SOCKET_ERROR)
+    {
+        i_err = WSAGetLastError();
+        str_err = Messageformat(i_err);
+        fprintf(stderr, "SOCKET SHUTDOWN ERROR: %s, %i\n", str_err, i_err);
+        LocalFree(str_err);
+    }
+    if (closesocket(con_sock) == SOCKET_ERROR)
+    {
+        i_err = WSAGetLastError();
+        str_err = Messageformat(i_err);
+        fprintf(stderr, "SOCKET CLOSE ERROR: %s, %i\n", str_err, i_err);
+        LocalFree(str_err);
+    }
 
     // call http module for response
-    char *response = "HTTP/1.0 200 OK\r\nConnection: close\r\n\r\nHello,World";
-    send(con_sock, response, strlen(response), 0);
-    
+    // char *response = "HTTP/1.0 200 OK\r\nConnection: close\r\n\r\nHello,World";
+    // cleanup
     delete_string(&request);
+    delete_string(&response);
     free(recv_buffer);
-    closesocket(con_sock); 
+
     printf("thread closing...\n");
     return 0;
 }
