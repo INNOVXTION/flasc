@@ -26,7 +26,8 @@ struct http_response{
 };
 
 enum STATUS_CODE request_header_validator(char *request_line);
-int response_head_builder(enum STATUS_CODE STATUS_CODE, string *response);
+int response_statusline_builder(enum STATUS_CODE STATUS_CODE, string *response);
+int response_header_builder(string *header);
 
 int http_handler(string *request, string *output)
 {   
@@ -53,7 +54,7 @@ int http_handler(string *request, string *output)
     char *token_line = strtok_r(request->data, CRLF, &save_line); //checks for formatting of first lien
     if (!token_line) {
         status = BAD_REQUEST;
-        response_head_builder(status, &response.status_line);
+        response_statusline_builder(status, &response.status_line);
         delete_string(&response.status_line);
         delete_string(&response.body);
         return 0;
@@ -62,20 +63,21 @@ int http_handler(string *request, string *output)
     // request semantic
     status = request_header_validator(token_line);
     if (status != OK) {
-        response_head_builder(status, &response.status_line);
+        response_statusline_builder(status, &response.status_line);
         delete_string(&response.status_line);
         delete_string(&response.body);
         return 0;
     }
-    // construction
-    // header
-    response_head_builder(status, &response.status_line);
-    // body
-    // TODO
-
+    
     // assembling response string
-    // status line
+    response_statusline_builder(status, &response.status_line);
+    response_header_builder(&response.header);
+
     if (string_append(response.status_line.data, output) == STRING_ERROR) {
+        fprintf(stderr, "assembling response string erro\n");
+        return -1;
+    }
+    if (string_append(response.header.data, output) == STRING_ERROR) {
         fprintf(stderr, "assembling response string erro\n");
         return -1;
     }
@@ -84,10 +86,7 @@ int http_handler(string *request, string *output)
     //     return -1;
     // }
     // header
-    if (string_append("Connection: close\r\nContent-Type: text/html\r\n", output) == STRING_ERROR) {
-        fprintf(stderr, "assembling response string erro\n");
-        return -1;
-    }
+
     // body
     if (string_append("\r\nhello, world!", output) == STRING_ERROR) {
         fprintf(stderr, "assembling response string erro\n");
@@ -102,7 +101,7 @@ int http_handler(string *request, string *output)
 
 //response crafter
 //header, takes status code and response lne string to edit
-int response_head_builder(enum STATUS_CODE s, string *status_line)
+int response_statusline_builder(enum STATUS_CODE s, string *status_line)
 {
     if (string_append(HTTP_VERSION, status_line) == STRING_ERROR) {
         fprintf(stderr, "response head builder string error\n");
@@ -135,17 +134,31 @@ int response_head_builder(enum STATUS_CODE s, string *status_line)
         return -1;
     }
     return 0;
-
 }
 
-//body crafter
-// int response_body_builder()
-// {
+// header crafter
+int response_header_builder(string *header)
+{
+    int header_field_amnt = 2;
+    char *header_fields[header_field_amnt];
+    header_fields[0] = "Connection: close\r\n";
+    header_fields[1] = "Content-Type: text/html\r\n";
 
-// }
+    for (int i = 0; i < header_field_amnt; i++)
+    {
+        if (string_append(header_fields[i], header) == STRING_ERROR) {
+            fprintf(stderr, "assembling response string erro\n");
+            return -1;
+        }
+    }
+    return 0;
+}   
 
-
-// dispatcher
+// body crafter
+int response_body_builder()
+{
+    return 0;
+}
 
 enum STATUS_CODE request_header_validator(char *request_line)
 {

@@ -9,5 +9,6 @@ int main() {
     return 1;
 }
 
-// function to parse text file for routing
+// reading config file
 
+// create route tabele

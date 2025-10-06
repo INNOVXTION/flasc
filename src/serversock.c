@@ -42,8 +42,7 @@ int server(void)
     char *str_err;
     char s[INET6_ADDRSTRLEN];
 
-    SOCKET listen_sock, con_sock;
-    SOCKET *sock_copy = malloc(sizeof(SOCKET));
+    SOCKET listen_sock, con_sock, *sock_copy;
 
     LPDWORD thread_id;
     HANDLE h_thread;
@@ -109,6 +108,8 @@ int server(void)
             inet_ntop(client_addr.ss_family, (struct sockaddr*) &client_addr, s, sizeof(s));
             fprintf(stderr,"connected to: %s\n", s);
             // handing off to worker
+            
+            sock_copy = malloc(sizeof(SOCKET));
             *sock_copy = con_sock; //copying socket
             h_thread = (HANDLE) _beginthreadex(NULL, 0, accept_worker, sock_copy, 0, NULL);
             if (h_thread == 0)
