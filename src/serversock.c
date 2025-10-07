@@ -14,7 +14,7 @@
 #include "flasc.h"
 
 #define BACKLOG 5
-#define PORT "1337"
+// #define PORT "1337"
 #define BUFFER_SIZE 512 //0.5 KB
 #define MESSAGE_BUFFER 50
 #define HTTP_REQ_BUFFER 4096 // 4KB
@@ -177,7 +177,7 @@ SOCKET new_lisock(void)
 
 
     // receiving IP addresses
-    if ((status_code = getaddrinfo(HOST, PORT, &hint, &addr_res)) != 0 )
+    if ((status_code = getaddrinfo(HOST, port, &hint, &addr_res)) != 0 )
     {
         err = WSAGetLastError();
         str_err = Messageformat(err);
@@ -251,7 +251,7 @@ SOCKET new_lisock(void)
         str_err = Messageformat(err);
         fprintf(stderr, "IP PRINT ERROR: %s\n", str_err);
     }
-    fprintf(stderr, "Hosting on:\nip: %s on port: %s\n", ip, PORT);
+    fprintf(stderr, "Hosting on:\nip: %s on port: %s\n", ip, port);
 
 
     // listening on socket

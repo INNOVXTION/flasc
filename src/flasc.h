@@ -10,6 +10,15 @@ typedef struct {
     int cap;
 } string;
 
+struct route {
+    string URI;
+    string page;
+};
+
+extern struct route routing_table[];
+extern char port[];
+extern char rootpath[];
+
 int server(void);
 
 int string_builder(int cap, string* new_string);

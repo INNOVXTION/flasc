@@ -6,17 +6,11 @@
 #define CRLF "\r\n"
 #define SP " "
 
-
 enum STATUS_CODE {
     OK = 200,
     BAD_REQUEST = 400,
     FILE_NOT_FOUND = 404,
     SERVER_ERROR = 500
-};
-
-enum method{
-    GET,
-    POST,
 };
 
 struct http_response{
@@ -28,6 +22,7 @@ struct http_response{
 enum STATUS_CODE request_header_validator(char *request_line);
 int response_statusline_builder(enum STATUS_CODE STATUS_CODE, string *response);
 int response_header_builder(string *header);
+int response_body_builder(string *body);
 
 int http_handler(string *request, string *output)
 {   
@@ -49,7 +44,6 @@ int http_handler(string *request, string *output)
     }
 
     // validation
-    // request line formatting
     char *save_line;
     char *token_line = strtok_r(request->data, CRLF, &save_line); //checks for formatting of first lien
     if (!token_line) {
@@ -59,12 +53,15 @@ int http_handler(string *request, string *output)
         delete_string(&response.body);
         return 0;
     };
-    // validation
-    // request semantic
     status = request_header_validator(token_line);
     if (status != OK) {
         response_statusline_builder(status, &response.status_line);
+        if (string_append(response.status_line.data, output) == STRING_ERROR) {
+            fprintf(stderr, "assembling response string erro\n");
+            return -1;
+        }
         delete_string(&response.status_line);
+        delete_string(&response.header);
         delete_string(&response.body);
         return 0;
     }
@@ -72,6 +69,7 @@ int http_handler(string *request, string *output)
     // assembling response string
     response_statusline_builder(status, &response.status_line);
     response_header_builder(&response.header);
+    response_body_builder(&response.body);
 
     if (string_append(response.status_line.data, output) == STRING_ERROR) {
         fprintf(stderr, "assembling response string erro\n");
@@ -81,22 +79,15 @@ int http_handler(string *request, string *output)
         fprintf(stderr, "assembling response string erro\n");
         return -1;
     }
-    // if (string_append(&response.body->data, output) == STRING_ERROR) {
-    //     fprintf(stderr, "assembling response string erro\n");
-    //     return -1;
-    // }
-    // header
-
-    // body
-    if (string_append("\r\nhello, world!", output) == STRING_ERROR) {
+    if (string_append(response.body.data, output) == STRING_ERROR) {
         fprintf(stderr, "assembling response string erro\n");
         return -1;
     }
+
     delete_string(&response.status_line);
     delete_string(&response.header);
     delete_string(&response.body);
     return 0;
-
 };
 
 //response crafter
@@ -147,7 +138,7 @@ int response_header_builder(string *header)
     for (int i = 0; i < header_field_amnt; i++)
     {
         if (string_append(header_fields[i], header) == STRING_ERROR) {
-            fprintf(stderr, "assembling response string erro\n");
+            fprintf(stderr, "assembling response header string erro\n");
             return -1;
         }
     }
@@ -155,8 +146,12 @@ int response_header_builder(string *header)
 }   
 
 // body crafter
-int response_body_builder()
+int response_body_builder(string *body)
 {
+    if (string_append("\r\nhello, world!", body) == STRING_ERROR) {
+        fprintf(stderr, "assembling response body string erro\n");
+        return -1;
+    }
     return 0;
 }
 
