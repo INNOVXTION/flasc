@@ -1,6 +1,7 @@
 #include "flasc.h"
 #include <string.h>
 #include <stdio.h>
+#include <windows.h>
 
 #define HTTP_VERSION "HTTP/1.0"
 #define CRLF "\r\n"
@@ -21,6 +22,11 @@ struct http_response{
     string status_line;
     string header;
     string body;
+};
+
+enum REQUEST_FLAG {
+    html,
+    css
 };
 
 enum STATUS_CODE request_header_validator(char *request_line, int *table_index);
@@ -60,16 +66,16 @@ int http_handler(string *request, string *output)
 
     // sending assembled response to accept worker
     if (string_append(response.status_line.data, output) == STRING_ERROR) {
-        fprintf(stderr, "assembling response string erro\n");
+        fprintf(stderr, "assembling response string error\n");
         return -1;
     }
     if (string_append(response.header.data, output) == STRING_ERROR) {
-        fprintf(stderr, "assembling response string erro\n");
+        fprintf(stderr, "assembling response string error\n");
         return -1;
     }
     if (status == OK) {
         if (string_append(response.body.data, output) == STRING_ERROR) {
-            fprintf(stderr, "assembling response string erro\n");
+            fprintf(stderr, "assembling response string error\n");
             return -1;
         }
     }
@@ -125,11 +131,12 @@ int response_header_builder(string *header)
     char *header_fields[header_field_amnt];
     header_fields[0] = "Connection: close\r\n";
     header_fields[1] = "Content-Type: text/html\r\n";
+    header_fields[2] = "Server: FlascServer\r\n";
 
     for (int i = 0; i < header_field_amnt; i++)
     {
         if (string_append(header_fields[i], header) == STRING_ERROR) {
-            fprintf(stderr, "assembling response header string erro\n");
+            fprintf(stderr, "assembling response header string error\n");
             return -1;
         }
     }
@@ -139,17 +146,40 @@ int response_header_builder(string *header)
 // body crafter
 int response_body_builder(string *body, int table_index)
 {
-    if (string_append("\r\nhello, world!", body) == STRING_ERROR) {
-        fprintf(stderr, "assembling response body string erro\n");
+    // assembling file path
+    char pagePath[MAX_PATH];
+    snprintf(pagePath, sizeof(pagePath), "%s\\static\\%s", rootpath, routing_table[table_index].page.data);
+
+    FILE *page_file = fopen(pagePath, "r");
+    if (!page_file) return -1;
+
+    fseek(page_file, 0, SEEK_END);
+    long size = ftell(page_file); // determining file size
+    fseek(page_file, 0, SEEK_SET);
+
+    char *buffer = malloc(size + 1);
+    if (!buffer) return -1;
+
+    size_t read_bytes = fread(buffer, 1, size, page_file);
+    buffer[read_bytes] = '\0';
+
+    if (string_append(CRLF, body) == STRING_ERROR) { // carriage return new line to indicate body
+        fprintf(stderr, "response body builder string error\n");
         return -1;
     }
+    if (string_append(buffer, body) == STRING_ERROR) {
+        fprintf(stderr, "response body builder string error\n");
+        return -1;
+    }
+    fclose(page_file);
+    free(buffer);
     return 0;
 }
 
 enum STATUS_CODE request_header_validator(char *request_line, int *table_index)
 {
     if (!request_line) return BAD_REQUEST;
-    char *save_element, *element;
+    char *save_element, *element, *end;
     // method validation
     element = strtok_r(request_line, SP, &save_element);
     if (strcmp(element, "GET") != 0) { // expand for POST request
@@ -157,17 +187,31 @@ enum STATUS_CODE request_header_validator(char *request_line, int *table_index)
     } 
     // URI validation
     element = strtok_r(NULL, SP, &save_element);
+    if (element[0] != '/') {
+        return BAD_REQUEST;
+    }
+    int uri_len = strlen(element);
     for (int i = 0; i < route_count; i ++)
     {
-        if (strcmp(element, routing_table[i].URI.data) == 0) {
-            *table_index = i; 
+        if (uri_len == 1){
+            if (strcmp(element, routing_table[i].URI.data) == 0) {
+            *table_index = i;
             break;
+        }
+        } else if (uri_len > 1) {
+            end = strrchr(element, '.');
+            if (end != NULL) {
+                *end = '\0';
+            }        
+            if (strcmp(element, routing_table[i].URI.data) == 0) {
+                *table_index = i;
+                break;
+            }
         }
         if (i == route_count - 1) {
             return FILE_NOT_FOUND;
         }
     }
-
     // version validation
     element = strtok_r(NULL, SP, &save_element);
     if (strcmp(element, HTTP_VERSION) != 0 && strcmp(element, "HTTP/1.1") != 0 ) {
