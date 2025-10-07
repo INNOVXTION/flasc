@@ -5,14 +5,18 @@
 #include <stdio.h>
 #include <windows.h>
 
-#define ROUTE_COUNT 5
+#define ROUTE_MAX 5
 #define FILE_LINE_BUFFER 512
 #define KEY_BUFFER 128
 #define VALUE_BUFFER 128
 
-struct route routing_table[ROUTE_COUNT];
+struct route routing_table[ROUTE_MAX];
 char port[5];
 char rootpath[MAX_PATH];
+
+int route_count = 0;
+const int route_table_URI_buffer = 128;
+const int route_table_page_buffer = 128;
 
 int route_init();
 
@@ -25,10 +29,10 @@ int main() {
     return 0;
 }
 
-// create route tabele
+// create routing table
 int route_init()
 {
-    // NULL → get path of the current executable
+    // get path of flasc.exe
     DWORD length = GetModuleFileNameA(NULL, rootpath, MAX_PATH);
     if (length == 0 || length == MAX_PATH) {
         fprintf(stderr, "Error getting executable path\n");
@@ -54,21 +58,12 @@ int route_init()
     char *line = malloc(FILE_LINE_BUFFER * sizeof(char));
     char *key = malloc(KEY_BUFFER * sizeof(char));
     char *value = malloc(VALUE_BUFFER * sizeof(char));
+    char *result = malloc (100 * sizeof(char));
     char *start, *end;
-    int table_index = 0;
-    char result[100];
 
     while (fgets(line, FILE_LINE_BUFFER - 1, config_file)) {
 
-        if (table_index > ROUTE_COUNT -1) {
-            fprintf(stderr, "ERROR, too many pages! maximum: 5\n");
-            fprintf(stderr, "FILE READ ERROR\n");
-            free(line);
-            free(key);
-            free(value);
-            return -1;
-        }
-        // Skip comments and empty lines
+        // skip comments and empty lines
         if (line[0] == '#' || line[0] == '\n') continue;
 
         if (sscanf(line, "%63[^=]=%63s", key, value) == 2) {
@@ -86,14 +81,20 @@ int route_init()
             if (start && end && start != end) {
                 size_t len = end - start - 1;    
                 strncpy(result, start + 1, len); 
-                result[len] = '\0';              
-                if (string_append(result, &(routing_table[table_index].URI)) == STRING_ERROR) {
+                result[len] = '\0';
+                if (string_builder(route_table_URI_buffer, &(routing_table[route_count].URI)) == STRING_ERROR) {
+                    fprintf(stderr, "CONFIG STRING URI BUILD ERROR\n");
+                };
+                if (string_append(result, &(routing_table[route_count].URI)) == STRING_ERROR) {
                     fprintf(stderr, "CONFIG STRING URI APPEND ERROR\n");
                 };
-                if (string_append(value, &(routing_table[table_index].page)) == STRING_ERROR) {
+                if (string_builder(route_table_page_buffer, &(routing_table[route_count].page)) == STRING_ERROR) {
+                    fprintf(stderr, "CONFIG STRING URI BUILD ERROR\n");
+                };
+                if (string_append(value, &(routing_table[route_count].page)) == STRING_ERROR) {
                     fprintf(stderr, "CONFIG STRING PAGE APPEND ERROR\n");
                 };
-                table_index++;
+                route_count++;
                 fprintf(stderr, "rout added: %s for %s\n", result, value);
                 continue;
             } else {
@@ -103,18 +104,19 @@ int route_init()
         else
         {
             fprintf(stderr, "FILE READ ERROR\n");
+            fclose(config_file);
             free(line);
             free(key);
             free(value);
+            free(result);
             return -1;
         }
     }
     fprintf(stderr, "config file successfully read!\n");
+    fclose(config_file);
     free(line);
     free(key);
     free(value);
+    free(result);
     return 0;
 }
-
-
-// shut down gracefully

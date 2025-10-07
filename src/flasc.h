@@ -1,8 +1,8 @@
 #ifndef FLASC_H
 #define FLASC_H
 #define STRING_ERROR -1
-#define response_status_line_cap 1024 // bytes
-#define response_body_cap 2048 // bytes
+#define ROUTE_COUNT 5
+
 
 typedef struct {
     char *data;
@@ -18,6 +18,7 @@ struct route {
 extern struct route routing_table[];
 extern char port[];
 extern char rootpath[];
+extern int route_count;
 
 int server(void);
 
