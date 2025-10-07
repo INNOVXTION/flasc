@@ -87,8 +87,8 @@ int http_handler(string *request, string *output)
     return 0;
 };
 
-//response crafter
-//header, takes status code and response lne string to edit
+//
+//status line builder takes status code and response lne string to edit
 int response_statusline_builder(enum STATUS_CODE s, string *status_line)
 {
     if (string_append(HTTP_VERSION, status_line) == STRING_ERROR) {
@@ -199,7 +199,7 @@ enum STATUS_CODE request_header_validator(char *request_line, int *table_index)
             break;
         }
         } else if (uri_len > 1) {
-            end = strrchr(element, '.');
+            end = strrchr(element, '.'); // slicing URI by dot character
             if (end != NULL) {
                 *end = '\0';
             }        
