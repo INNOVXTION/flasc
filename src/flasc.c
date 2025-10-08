@@ -9,12 +9,14 @@
 #define FILE_LINE_BUFFER 512
 #define KEY_BUFFER 128
 #define VALUE_BUFFER 128
+#define BUCKET_SIZE 100
 
-struct route routing_table[ROUTE_MAX];
+
 char port[5];
 char rootpath[MAX_PATH];
 
-int route_count = 0;
+struct hashtable ht;
+
 const int route_table_URI_buffer = 128;
 const int route_table_page_buffer = 128;
 
@@ -26,6 +28,7 @@ int main() {
         exit(1);
     }
     server();
+    hashtable_delete(&ht);
     return 0;
 }
 
@@ -57,14 +60,18 @@ int route_init()
 
     char *line = malloc(FILE_LINE_BUFFER * sizeof(char));
     char *key = malloc(KEY_BUFFER * sizeof(char));
+    char *result_key = malloc (100 * sizeof(char));
     char *value = malloc(VALUE_BUFFER * sizeof(char));
-    char *result = malloc (100 * sizeof(char));
     char *start, *end;
+
+    if (hashtable_set(&ht, BUCKET_SIZE) != 0) {
+        fprintf(stderr, "HASH TABLE INIT ERROR\n");
+    }
 
     while (fgets(line, FILE_LINE_BUFFER - 1, config_file)) {
 
         // skip comments and empty lines
-        if (line[0] == '#' || line[0] == '\n') continue;
+        if (line[0] == '[' || line[0] == '\n') continue;
 
         if (sscanf(line, "%63[^=]=%63s", key, value) == 2) {
             // printf("key: %s, value: %s\n", key, value);
@@ -80,22 +87,12 @@ int route_init()
             end   = strrchr(key, '"');
             if (start && end && start != end) {
                 size_t len = end - start - 1;    
-                strncpy(result, start + 1, len); 
-                result[len] = '\0';
-                if (string_builder(route_table_URI_buffer, &(routing_table[route_count].URI)) == STRING_ERROR) {
-                    fprintf(stderr, "CONFIG STRING URI BUILD ERROR\n");
+                strncpy(result_key, start + 1, len); 
+                result_key[len] = '\0';
+                if (node_append(result_key, value, &ht) != 0) {
+                    fprintf(stderr, "HASH APPEND ERROR\n");
                 };
-                if (string_append(result, &(routing_table[route_count].URI)) == STRING_ERROR) {
-                    fprintf(stderr, "CONFIG STRING URI APPEND ERROR\n");
-                };
-                if (string_builder(route_table_page_buffer, &(routing_table[route_count].page)) == STRING_ERROR) {
-                    fprintf(stderr, "CONFIG STRING URI BUILD ERROR\n");
-                };
-                if (string_append(value, &(routing_table[route_count].page)) == STRING_ERROR) {
-                    fprintf(stderr, "CONFIG STRING PAGE APPEND ERROR\n");
-                };
-                route_count++;
-                fprintf(stderr, "rout added: %s for %s\n", result, value);
+                fprintf(stderr, "rout added: %s for %s\n", result_key, value);
                 continue;
             } else {
                 printf("CONFIG FILE ERROR\n");
@@ -108,7 +105,7 @@ int route_init()
             free(line);
             free(key);
             free(value);
-            free(result);
+            free(result_key);
             return -1;
         }
     }
@@ -117,6 +114,8 @@ int route_init()
     free(line);
     free(key);
     free(value);
-    free(result);
+    free(result_key);
     return 0;
 }
+
+

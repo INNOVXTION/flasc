@@ -4,8 +4,8 @@ BUILD_DIR = bin
 TARGET = flasc.exe
 
 # Source and object files
-SRCS = $(SRC_DIR)/flasc.c $(SRC_DIR)/http.c $(SRC_DIR)/serversock.c $(SRC_DIR)/strings.c
-OBJS = $(BUILD_DIR)/flasc.o $(BUILD_DIR)/http.o $(BUILD_DIR)/serversock.o $(BUILD_DIR)/strings.o
+SRCS = $(SRC_DIR)/flasc.c $(SRC_DIR)/http.c $(SRC_DIR)/serversock.c $(SRC_DIR)/strings.c $(SRC_DIR)/hash.c
+OBJS = $(BUILD_DIR)/flasc.o $(BUILD_DIR)/http.o $(BUILD_DIR)/serversock.o $(BUILD_DIR)/strings.o $(BUILD_DIR)/hash.o
 
 # Default target
 all: $(TARGET)
