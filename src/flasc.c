@@ -28,7 +28,9 @@ int main() {
         exit(1);
     }
     server();
+    fprintf(stderr, "Cleaning up...\n");
     hashtable_delete(&ht);
+    fprintf(stderr, "Done\n");
     return 0;
 }
 

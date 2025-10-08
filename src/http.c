@@ -66,9 +66,6 @@ int http_handler(string *request, string *output)
 
     // validating request line
     request_parser(request, &response);
-    // char *save_line;
-    // char *token_line = strtok_r(request->data, CRLF, &save_line); //checks for formatting of first lien
-    // status = request_parser(token_line);   
 
     // assembling response string
     response_statusline_builder(&response);
@@ -90,7 +87,6 @@ int http_handler(string *request, string *output)
             return -1;
         }
     }
-
     // cleanup
     delete_string(&response.rep_file);
     delete_string(&response.file_type);
@@ -219,7 +215,7 @@ int request_parser(string *request, struct http_response *response)
     }
     int uri_len = strlen(element);
     // mapping index.html to "/"
-    if (strcmp(element, "index.html") == 0) {
+    if (strcmp(element, "/index.html") == 0) {
         char *filename = node_search("/", &ht);
         string_append(filename, &response->rep_file); 
         string_append("html", &response->file_type);
@@ -265,5 +261,6 @@ char *get_mime(char *file_extension)
 {
     if (strcmp(file_extension, ".html") == 0) return "text/html";
     if (strcmp(file_extension, ".css") == 0) return "text/css";
+    if (strcmp(file_extension, ".js") == 0) return "text/javascript";
     return NULL;
 }

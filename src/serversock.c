@@ -23,7 +23,7 @@
 #define POLL_SOCKET_AMNT 1
 
 const int poll_timeout = 2500; // 2.5 seconds
-const int thread_timeout = 60000; // one minute
+const int thread_timeout = 30000; // 30 seconds
 const int recv_timeout = 21000;
 
 void handle_sigint(int sig);
@@ -31,6 +31,8 @@ void *get_sockaddr_in(struct sockaddr *sa);
 SOCKET new_lisock(void);
 LPTSTR Messageformat(int message_id);
 unsigned int WINAPI accept_worker(void *arg);
+
+volatile sig_atomic_t stop = 0;
 
 int server(void)
 {    
@@ -73,7 +75,7 @@ int server(void)
         exit(-1);
     }
 
-    while (1)
+    while (stop == 0)
     {
         // polling socket
         sock_array[0].fd = listen_sock; // assinging our listening socket
@@ -122,7 +124,7 @@ int server(void)
         }
     }
 
-    WaitForSingleObject(h_thread, INFINITE);
+    WaitForSingleObject(h_thread, thread_timeout);
     CloseHandle(h_thread);
     
     // cleanup
@@ -134,17 +136,14 @@ int server(void)
         fprintf(stderr, "LISTEN SOCK CLOSE ERROR: %s\n", str_err);
         LocalFree(str_err);
     }
-    fprintf(stderr,"exiting...\n");
     WSACleanup();
     return 0;
 }
 
 void handle_sigint(int sig)
 {
-    printf("\nExiting...\n");
-    WSACleanup();
-
-    exit(0);
+    printf("\nShutting down...\n");
+    stop = 1;
 }
 
 void *get_sockaddr_in(struct sockaddr *sa)
@@ -287,7 +286,7 @@ LPTSTR Messageformat(int message_id)
         ) == 0)
     {
         fprintf(stderr, "Message Format Error\n");
-        exit(1);
+        return NULL;
     }
     return formatted_message;
 }
@@ -314,7 +313,7 @@ unsigned int WINAPI accept_worker(void *sock)
 
     // receiver loop
     fprintf(stderr, "Waiting for data...\n");
-    while (1)
+    while (stop == 0)
     {
         if (packets_received > 0)
         {
