@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 
 
 
@@ -35,12 +36,20 @@ int hash_key(const char* key, int cap) {
 
 int node_append(char *key, char *value, struct hashtable *ht)
 {
+    if (!key) return -1;
+    if (!value) return -1;
+    if (!ht) return -1;
     int index = hash_key(key, ht->cap);
     struct node *n, *ptr;
 
+    char *key_copy = malloc(strlen(key) * sizeof(char));
+    strcpy(key_copy, key);
+    char *value_copy = malloc(strlen(value) * sizeof(char));
+    strcpy(value_copy, value);
+
     n = malloc(sizeof(struct node));
-    n->key = key;
-    n->value = value;
+    n->key = key_copy;
+    n->value = value_copy;
     n->next = NULL;
 
     // empty slot in hash table
@@ -58,9 +67,12 @@ int node_append(char *key, char *value, struct hashtable *ht)
             return 0;
         }
     }
+    free(key_copy);
+    free(value_copy);
     return -1;
 }
 
+// returns value
 char *node_search(char *key, struct hashtable *ht)
 {
     if (!key) return NULL;

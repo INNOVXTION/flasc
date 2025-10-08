@@ -18,36 +18,39 @@ enum STATUS_CODE {
     SERVER_ERROR = 500
 };
 
-enum MIME {
-    html,
-    css
-};
-
 struct http_response{
-    enum STATUS_CODE;
-    enum MIME;
+    enum STATUS_CODE status;
+
+    string rep_file;
+    string file_type;
+    
     string status_line;
     string header;
     string body;
 };
 
-enum REQUEST_FLAG {
-    html,
-    css
-};
 
-enum STATUS_CODE request_header_validator(char *request_line);
-int response_statusline_builder(enum STATUS_CODE STATUS_CODE, string *response);
-int response_header_builder(string *header);
-int response_body_builder(string *body, char *key);
+int request_parser(string *request, struct http_response *response);
+char *get_mime(char *file_extension);
+
+int response_statusline_builder(struct http_response *response);
+int response_header_builder(struct http_response *response);
+int response_body_builder(struct http_response *response);
 
 int http_handler(string *request, string *output)
 {   
     struct http_response response;
     enum STATUS_CODE status;
-    char *key;
 
     // initializing response struct DONT FORGET TO FREE AFTER !
+    if (string_builder(response_status_line_cap, &response.rep_file) == STRING_ERROR) {
+        fprintf(stderr, "http handler string error\n");
+        return -1;
+    }
+    if (string_builder(response_status_line_cap, &response.file_type) == STRING_ERROR) {
+        fprintf(stderr, "http handler string error\n");
+        return -1;
+    }
     if (string_builder(response_status_line_cap, &response.status_line) == STRING_ERROR) {
         fprintf(stderr, "http handler string error\n");
         return -1;
@@ -62,14 +65,15 @@ int http_handler(string *request, string *output)
     }
 
     // validating request line
-    char *save_line;
-    char *token_line = strtok_r(request->data, CRLF, &save_line); //checks for formatting of first lien
-    status = request_header_validator(token_line);   
+    request_parser(request, &response);
+    // char *save_line;
+    // char *token_line = strtok_r(request->data, CRLF, &save_line); //checks for formatting of first lien
+    // status = request_parser(token_line);   
 
     // assembling response string
-    response_statusline_builder(status, &response.status_line);
-    response_header_builder(&response.header);
-    response_body_builder(&response.body);
+    response_statusline_builder(&response);
+    response_header_builder(&response);
+    response_body_builder(&response);
 
     // sending assembled response to accept worker
     if (string_append(response.status_line.data, output) == STRING_ERROR) {
@@ -80,7 +84,7 @@ int http_handler(string *request, string *output)
         fprintf(stderr, "assembling response string error\n");
         return -1;
     }
-    if (status == OK) {
+    if (response.status == OK) {
         if (string_append(response.body.data, output) == STRING_ERROR) {
             fprintf(stderr, "assembling response string error\n");
             return -1;
@@ -88,6 +92,8 @@ int http_handler(string *request, string *output)
     }
 
     // cleanup
+    delete_string(&response.rep_file);
+    delete_string(&response.file_type);
     delete_string(&response.status_line);
     delete_string(&response.header);
     delete_string(&response.body);
@@ -96,35 +102,36 @@ int http_handler(string *request, string *output)
 
 //
 //status line builder takes status code and response lne string to edit
-int response_statusline_builder(enum STATUS_CODE s, string *status_line)
+int response_statusline_builder(struct http_response *response)
 {
-    if (string_append(HTTP_VERSION, status_line) == STRING_ERROR) {
+    
+    if (string_append(HTTP_VERSION, &response->status_line) == STRING_ERROR) {
         fprintf(stderr, "response head builder string error\n");
         return -1;
     }
-    switch (s) {
+    switch (response->status) {
         case OK:
-            if (string_append(" 200 OK", status_line) == STRING_ERROR) {
+            if (string_append(" 200 OK", &response->status_line) == STRING_ERROR) {
                 fprintf(stderr, "response head builder string error\n");
             }
             break;
         case BAD_REQUEST:
-            if (string_append(" 400 Bad Request", status_line) == STRING_ERROR) {
+            if (string_append(" 400 Bad Request", &response->status_line) == STRING_ERROR) {
                 fprintf(stderr, "response head builder string error\n");
             }
             break;
         case FILE_NOT_FOUND:
-            if (string_append(" 404 Not Found", status_line) == STRING_ERROR) {
+            if (string_append(" 404 Not Found", &response->status_line) == STRING_ERROR) {
                 fprintf(stderr, "response head builder string error\n");
             }
             break;
         case SERVER_ERROR:
-            if (string_append(" 500 Internal Server Error", status_line) == STRING_ERROR) {
+            if (string_append(" 500 Internal Server Error", &response->status_line) == STRING_ERROR) {
                 fprintf(stderr, "response head builder string error\n");
             }
             break;
     }
-    if (string_append(CRLF, status_line) == STRING_ERROR) {
+    if (string_append(CRLF, &response->status_line) == STRING_ERROR) {
         fprintf(stderr, "response head builder string error\n");
         return -1;
     }
@@ -132,17 +139,24 @@ int response_statusline_builder(enum STATUS_CODE s, string *status_line)
 }
 
 // header crafter
-int response_header_builder(string *header)
+int response_header_builder(struct http_response *response)
 {
-    int header_field_amnt = 2;
+    int header_field_amnt = 3;
     char *header_fields[header_field_amnt];
     header_fields[0] = "Connection: close\r\n";
-    header_fields[1] = "Content-Type: text/html\r\n";
-    header_fields[2] = "Server: FlascServer\r\n";
+    header_fields[1] = "Server: FlascServer\r\n";
+
+    char content_type[100];
+
+    strcat(content_type, "Content-Type: ");
+    strcat(content_type, response->file_type.data);
+    strcat(content_type, "\r\n");
+
+    header_fields[2] = content_type;
 
     for (int i = 0; i < header_field_amnt; i++)
     {
-        if (string_append(header_fields[i], header) == STRING_ERROR) {
+        if (string_append(header_fields[i], &response->header) == STRING_ERROR) {
             fprintf(stderr, "assembling response header string error\n");
             return -1;
         }
@@ -151,12 +165,11 @@ int response_header_builder(string *header)
 }   
 
 // body crafter
-int response_body_builder(string *body, char *key)
+int response_body_builder(struct http_response *response)
 {
     // assembling file path
     char pagePath[MAX_PATH];
-    char *filename = node_search()
-    snprintf(pagePath, sizeof(pagePath), "%s\\static\\%s", rootpath, routing_table[table_index].page.data);
+    snprintf(pagePath, sizeof(pagePath), "%s\\static\\%s", rootpath, response->rep_file.data);
 
     FILE *page_file = fopen(pagePath, "r");
     if (!page_file) return -1;
@@ -171,11 +184,11 @@ int response_body_builder(string *body, char *key)
     size_t read_bytes = fread(buffer, 1, size, page_file);
     buffer[read_bytes] = '\0';
 
-    if (string_append(CRLF, body) == STRING_ERROR) { // carriage return new line to indicate body
+    if (string_append(CRLF, &response->body) == STRING_ERROR) { // carriage return new line to indicate body
         fprintf(stderr, "response body builder string error\n");
         return -1;
     }
-    if (string_append(buffer, body) == STRING_ERROR) {
+    if (string_append(buffer, &response->body) == STRING_ERROR) {
         fprintf(stderr, "response body builder string error\n");
         return -1;
     }
@@ -184,56 +197,73 @@ int response_body_builder(string *body, char *key)
     return 0;
 }
 
-enum STATUS_CODE request_header_validator(char *request_line)
+int request_parser(string *request, struct http_response *response)
 {
-    if (!request_line) return BAD_REQUEST;
-    char *save_element, *element, *end;
+    char *save_line, *save_element, *element, *end;;
+    char *request_line = strtok_r(request->data, CRLF, &save_line);
+
+    if (!request_line || !request->data) {
+        response->status = BAD_REQUEST;
+        return -1;
+    }
     // method validation
     element = strtok_r(request_line, SP, &save_element);
     if (strcmp(element, "GET") != 0) { // expand for POST request
-        return BAD_REQUEST;
+        response->status = BAD_REQUEST;
+        return -1;
     } 
     // URI validation
     element = strtok_r(NULL, SP, &save_element);
     if (element[0] != '/') {
-        return BAD_REQUEST;
+        return response->status = BAD_REQUEST;
     }
     int uri_len = strlen(element);
+    // mapping index.html to "/"
+    if (strcmp(element, "index.html") == 0) {
+        char *filename = node_search("/", &ht);
+        string_append(filename, &response->rep_file); 
+        string_append("html", &response->file_type);
+        // version validation
+        element = strtok_r(NULL, SP, &save_element);
+        if (strcmp(element, HTTP_VERSION) != 0 && strcmp(element, "HTTP/1.1") != 0 ) {
+            return response->status = BAD_REQUEST;
+        } 
+        return response->status = OK;
+    }
+    // extracing file type
+    end = strrchr(element, '.');
+    if (end != NULL) {
+        char *mime = get_mime(end);
+        if (!mime) {
+            response->status = BAD_REQUEST;
+            return -1;
+        }
+        string_append(mime, &response->file_type);
+    }
+    // truncating to "/route"
+    if (end != NULL) {
+        *end = '\0';
+    } 
 
-    if (uri_len == 1 && element[0] == '/')
-
-
-    // for (int i = 0; i < route_count; i ++)
-    // {
-    //     if (uri_len == 1){
-    //         if (strcmp(element, routing_table[i].URI.data) == 0) {
-    //         *table_index = i;
-    //         break;
-    //     }
-    //     } else if (uri_len > 1) {
-    //         end = strrchr(element, '.'); // slicing URI by dot character
-    //         if (end != NULL) {
-    //             *end = '\0';
-    //         }        
-    //         if (strcmp(element, routing_table[i].URI.data) == 0) {
-    //             *table_index = i;
-    //             break;
-    //         }
-    //     }
-    //     if (i == route_count - 1) {
-    //         return FILE_NOT_FOUND;
-    //     }
-    // }
+    char *filename = node_search(element, &ht);
+    if (!filename) {
+        response->status = FILE_NOT_FOUND;
+        return -1;
+    }
+    string_append(filename, &response->rep_file); 
 
     // version validation
     element = strtok_r(NULL, SP, &save_element);
     if (strcmp(element, HTTP_VERSION) != 0 && strcmp(element, "HTTP/1.1") != 0 ) {
-        return BAD_REQUEST;
+        return response->status = BAD_REQUEST;
     } 
-    return OK;
+    response->status = OK;
+    return 0;
 }
 
-char *get_mime()
+char *get_mime(char *file_extension)
 {
-
+    if (strcmp(file_extension, ".html") == 0) return "text/html";
+    if (strcmp(file_extension, ".css") == 0) return "text/css";
+    return NULL;
 }

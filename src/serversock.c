@@ -18,6 +18,7 @@
 #define BUFFER_SIZE 512 //0.5 KB
 #define MESSAGE_BUFFER 50
 #define HTTP_REQ_BUFFER 4096 // 4KB
+#define HTTP_RESP_BUFFER 4096 // 4KB
 #define HOST NULL
 #define POLL_SOCKET_AMNT 1
 
@@ -306,7 +307,7 @@ unsigned int WINAPI accept_worker(void *sock)
     if (string_builder(HTTP_REQ_BUFFER, &request) == STRING_ERROR) {
         fprintf(stderr, "thread string error\n");
     };
-    if (string_builder(1024, &response) == STRING_ERROR) {
+    if (string_builder(HTTP_RESP_BUFFER, &response) == STRING_ERROR) {
         fprintf(stderr, "thread string error\n");
     };
     int null_mark = 0;
