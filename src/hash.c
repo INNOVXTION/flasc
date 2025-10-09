@@ -23,7 +23,7 @@ int hashtable_set (struct hashtable *ht, int cap)
     return 0;
 }
 
-int hash_key(const char* key, int cap) {
+int hash_key(const char* key, int cap) { //FNV-1a hash function
     if (cap <= 0) return -1;
     uint64_t hash = FNV_OFFSET;
     for (const char* p = key; *p; p++) {

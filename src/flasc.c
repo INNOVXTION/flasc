@@ -11,7 +11,6 @@
 #define VALUE_BUFFER 128
 #define BUCKET_SIZE 100
 
-
 char port[5];
 char rootpath[MAX_PATH];
 

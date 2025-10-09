@@ -31,7 +31,6 @@ extern struct hashtable ht;
 extern char port[];
 extern char rootpath[];
 
-
 int server(void);
 
 int string_builder(int cap, string* new_string);

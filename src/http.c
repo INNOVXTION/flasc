@@ -96,7 +96,79 @@ int http_handler(string *request, string *output)
     return 0;
 };
 
-//
+// valdiating request
+int request_parser(string *request, struct http_response *response)
+{
+    char *save_line, *save_element, *element, *end;;
+    // isolating request line
+    char *request_line = strtok_r(request->data, CRLF, &save_line);
+
+    if (!request_line || !request->data) {
+        response->status = BAD_REQUEST;
+        return -1;
+    }
+    // method validation
+    element = strtok_r(request_line, SP, &save_element);
+    if (strcmp(element, "GET") != 0) { // expand for POST request
+        response->status = BAD_REQUEST;
+        return -1;
+    } 
+    // URI validation
+    element = strtok_r(NULL, SP, &save_element);
+    if (element[0] != '/') {
+        return response->status = BAD_REQUEST;
+    }
+    int uri_len = strlen(element);
+    // mapping index.html to "/"
+    if (strcmp(element, "/index.html") == 0) {
+        char *filename = node_search("/", &ht);
+        string_append(filename, &response->rep_file); 
+        string_append("html", &response->file_type);
+        // version validation
+        element = strtok_r(NULL, SP, &save_element);
+        if (strcmp(element, HTTP_VERSION) != 0 && strcmp(element, "HTTP/1.1") != 0 ) {
+            return response->status = BAD_REQUEST;
+        } 
+        return response->status = OK;
+    }
+    // extracing file type
+    end = strrchr(element, '.');
+    if (end != NULL) {
+        char *mime = get_mime(end);
+        if (!mime) {
+            response->status = FILE_NOT_FOUND;
+            return -1;
+        }
+        string_append(mime, &response->file_type);
+    }
+    // truncating to "/route"
+    if (end != NULL) {
+        *end = '\0';
+    } 
+
+    char *filename = node_search(element, &ht);
+    if (!filename) {
+        response->status = FILE_NOT_FOUND;
+        return -1;
+    }
+    string_append(filename, &response->rep_file); 
+
+    // version validation
+    element = strtok_r(NULL, SP, &save_element);
+    if (strcmp(element, HTTP_VERSION) != 0 && strcmp(element, "HTTP/1.1") != 0 ) {
+        return response->status = BAD_REQUEST;
+    } 
+    response->status = OK;
+    return 0;
+}
+
+char *get_mime(char *file_extension)
+{
+    if (strcmp(file_extension, ".html") == 0) return "text/html";
+    if (strcmp(file_extension, ".css") == 0) return "text/css";
+    if (strcmp(file_extension, ".js") == 0) return "text/javascript";
+    return NULL;
+}
 //status line builder takes status code and response lne string to edit
 int response_statusline_builder(struct http_response *response)
 {
@@ -150,8 +222,7 @@ int response_header_builder(struct http_response *response)
 
     header_fields[2] = content_type;
 
-    for (int i = 0; i < header_field_amnt; i++)
-    {
+    for (int i = 0; i < header_field_amnt; i++) {
         if (string_append(header_fields[i], &response->header) == STRING_ERROR) {
             fprintf(stderr, "assembling response header string error\n");
             return -1;
@@ -191,76 +262,4 @@ int response_body_builder(struct http_response *response)
     fclose(page_file);
     free(buffer);
     return 0;
-}
-
-int request_parser(string *request, struct http_response *response)
-{
-    char *save_line, *save_element, *element, *end;;
-    char *request_line = strtok_r(request->data, CRLF, &save_line);
-
-    if (!request_line || !request->data) {
-        response->status = BAD_REQUEST;
-        return -1;
-    }
-    // method validation
-    element = strtok_r(request_line, SP, &save_element);
-    if (strcmp(element, "GET") != 0) { // expand for POST request
-        response->status = BAD_REQUEST;
-        return -1;
-    } 
-    // URI validation
-    element = strtok_r(NULL, SP, &save_element);
-    if (element[0] != '/') {
-        return response->status = BAD_REQUEST;
-    }
-    int uri_len = strlen(element);
-    // mapping index.html to "/"
-    if (strcmp(element, "/index.html") == 0) {
-        char *filename = node_search("/", &ht);
-        string_append(filename, &response->rep_file); 
-        string_append("html", &response->file_type);
-        // version validation
-        element = strtok_r(NULL, SP, &save_element);
-        if (strcmp(element, HTTP_VERSION) != 0 && strcmp(element, "HTTP/1.1") != 0 ) {
-            return response->status = BAD_REQUEST;
-        } 
-        return response->status = OK;
-    }
-    // extracing file type
-    end = strrchr(element, '.');
-    if (end != NULL) {
-        char *mime = get_mime(end);
-        if (!mime) {
-            response->status = BAD_REQUEST;
-            return -1;
-        }
-        string_append(mime, &response->file_type);
-    }
-    // truncating to "/route"
-    if (end != NULL) {
-        *end = '\0';
-    } 
-
-    char *filename = node_search(element, &ht);
-    if (!filename) {
-        response->status = FILE_NOT_FOUND;
-        return -1;
-    }
-    string_append(filename, &response->rep_file); 
-
-    // version validation
-    element = strtok_r(NULL, SP, &save_element);
-    if (strcmp(element, HTTP_VERSION) != 0 && strcmp(element, "HTTP/1.1") != 0 ) {
-        return response->status = BAD_REQUEST;
-    } 
-    response->status = OK;
-    return 0;
-}
-
-char *get_mime(char *file_extension)
-{
-    if (strcmp(file_extension, ".html") == 0) return "text/html";
-    if (strcmp(file_extension, ".css") == 0) return "text/css";
-    if (strcmp(file_extension, ".js") == 0) return "text/javascript";
-    return NULL;
 }

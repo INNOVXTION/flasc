@@ -94,10 +94,10 @@ int server(void)
             // fprintf(stderr, "poll time out, trying again..\n");
             continue;
         }
+        // new connection found !
         if (poll_status > 0)
         {
             // fprintf(stderr, "poll triggered!\n");
-            // accept connections
             socklen_t addrlen = sizeof(client_addr);
             con_sock = accept(listen_sock, (struct sockaddr*) &client_addr, &addrlen);
             if (con_sock == INVALID_SOCKET)
@@ -110,15 +110,16 @@ int server(void)
             }
             inet_ntop(client_addr.ss_family, (struct sockaddr*) &client_addr, s, sizeof(s));
             fprintf(stderr,"connected to: %s\n", s);
+
             // handing off to worker
-            
             sock_copy = malloc(sizeof(SOCKET));
             *sock_copy = con_sock; //copying socket
             h_thread = (HANDLE) _beginthreadex(NULL, 0, accept_worker, sock_copy, 0, NULL);
             if (h_thread == 0)
             {
                 fprintf(stderr,"THREAD CREATION ERROR.\n");
-                closesocket(sock_array[0].fd);
+                free(sock_copy);
+                closesocket(con_sock);
                 break;
             }
         }
@@ -140,7 +141,7 @@ int server(void)
     return 0;
 }
 
-void handle_sigint(int sig)
+void handle_sigint(int sig) // graceful shut down
 {
     printf("\nShutting down...\n");
     stop = 1;
@@ -313,12 +314,9 @@ unsigned int WINAPI accept_worker(void *sock)
 
     // receiver loop
     fprintf(stderr, "Waiting for data...\n");
-    while (stop == 0)
-    {
-        if (packets_received > 0)
-        {
-            if (strstr(request.data, "\r\n\r\n") != NULL) //cheacking HTTP header
-            {
+    while (stop == 0) {
+        if (packets_received > 0) {
+            if (strstr(request.data, "\r\n\r\n") != NULL) { //checking HTTP header
                 fprintf(stderr, "HTTP request found!\n");
                 fprintf(stderr, "Data received:\n----\n%s---\n", request.data);
                 http_handler(&request, &response);
@@ -326,8 +324,7 @@ unsigned int WINAPI accept_worker(void *sock)
                 send(con_sock, response.data, response.len, 0);
                 break;
             }
-            else if (request.len + packets_received >= HTTP_REQ_BUFFER)
-            {
+            else if (request.len + packets_received >= HTTP_REQ_BUFFER) {
                 fprintf(stderr, "buffer overflow! \n");
                 break;
             }
